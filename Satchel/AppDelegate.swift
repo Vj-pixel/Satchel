@@ -3,52 +3,15 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     nonisolated(unsafe) static var shared: AppDelegate?
 
-    private var statusItem: NSStatusItem?
     var paletteWindow: PaletteWindow?
     private var eventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
-        setupMenuBar()
         paletteWindow = PaletteWindow()
         setupDismiss()
         registerHotKey()
-    }
-
-    // MARK: - Menu bar
-
-    private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        guard let btn = statusItem?.button else { return }
-        btn.image = NSImage(systemSymbolName: "bag.fill", accessibilityDescription: "Satchel")
-        btn.action = #selector(showStatusMenu)
-        btn.target = self
-    }
-
-    @objc private func showStatusMenu() {
-        let menu = NSMenu()
-
-        let invoke = NSMenuItem(title: "Open Palette", action: #selector(togglePalette), keyEquivalent: "")
-        invoke.target = self
-        menu.addItem(invoke)
-        menu.addItem(.separator())
-
-        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
-        settings.target = self
-        menu.addItem(settings)
-        menu.addItem(.separator())
-
-        menu.addItem(NSMenuItem(title: "Quit Satchel", action: #selector(NSApp.terminate(_:)), keyEquivalent: "q"))
-
-        statusItem?.menu = menu
-        statusItem?.button?.performClick(nil)
-        statusItem?.menu = nil
-    }
-
-    @objc private func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Palette
