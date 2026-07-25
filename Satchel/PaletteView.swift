@@ -2,108 +2,119 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct PaletteView: View {
-    @EnvironmentObject var store: PinStore
-    @State private var isTargeted = false
+    @Environment(PinStore.self) var store
+    @State private var appeared = false
+    @State private var dropTargeted = false
 
-    private let cols = Array(repeating: GridItem(.fixed(68), spacing: 6), count: 4)
+    private let radius: CGFloat = 90
+    private let itemSize: CGFloat = 60
 
     var body: some View {
         ZStack {
-            VisualEffect(material: .hudWindow, blending: .behindWindow)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+            // Transparent full-area drop zone (adds new pins)
+            Color.clear
+                .onDrop(of: [.fileURL], isTargeted: $dropTargeted, perform: handleDrop)
 
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+            // Subtle drop-target ring
+            Circle()
+                .strokeBorder(Color.accentColor, lineWidth: 2)
+                .frame(width: radius * 2 + 8, height: radius * 2 + 8)
+                .opacity(dropTargeted ? 1 : 0)
+                .animation(.easeInOut(duration: 0.12), value: dropTargeted)
 
-            VStack(spacing: 0) {
-                header
-                Divider().opacity(0.3)
-                if store.items.isEmpty {
-                    emptyState
-                } else {
-                    grid
-                }
+            // Center pip — anchors the eye at the cursor position
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5))
+                .frame(width: 14, height: 14)
+                .shadow(color: .black.opacity(0.3), radius: 4)
+
+            if store.items.isEmpty {
+                emptyRing
+            } else {
+                radialItems
             }
         }
-        .frame(width: 316)
-        .onDrop(of: [.fileURL], isTargeted: $isTargeted, perform: handlePaletteDrop)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.accentColor, lineWidth: 2)
-                .opacity(isTargeted ? 1 : 0)
-                .animation(.easeInOut(duration: 0.12), value: isTargeted)
-        )
+        .frame(width: 260, height: 260)
+        .onAppear {
+            withAnimation { appeared = true }
+        }
+        .onDisappear {
+            appeared = false
+        }
     }
 
-    private var header: some View {
-        HStack {
-            Text("Satchel")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("⌥Space")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.primary.opacity(0.06))
+    // MARK: - Radial items
+
+    private var radialItems: some View {
+        ForEach(Array(store.items.enumerated()), id: \.element.id) { i, item in
+            let angle = radialAngle(i, of: store.items.count)
+            RadialItemView(item: item)
+                .offset(
+                    x: appeared ? radius * cos(angle) : 0,
+                    y: appeared ? radius * sin(angle) : 0
+                )
+                .scaleEffect(appeared ? 1 : 0.1)
+                .opacity(appeared ? 1 : 0)
+                .animation(
+                    .spring(response: 0.3, dampingFraction: 0.68)
+                    .delay(Double(i) * 0.04),
+                    value: appeared
                 )
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
     }
 
-    private var grid: some View {
-        LazyVGrid(columns: cols, spacing: 6) {
-            ForEach(store.items) { item in
-                PinnedItemView(item: item)
-                    .environmentObject(store)
+    // MARK: - Empty state (dashed ghost circles)
+
+    private var emptyRing: some View {
+        Group {
+            ForEach(0..<4, id: \.self) { i in
+                let angle = radialAngle(i, of: 4)
+                Circle()
+                    .strokeBorder(
+                        Color.primary.opacity(0.18),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+                    )
+                    .frame(width: itemSize, height: itemSize)
+                    .offset(
+                        x: appeared ? radius * cos(angle) : 0,
+                        y: appeared ? radius * sin(angle) : 0
+                    )
+                    .scaleEffect(appeared ? 1 : 0.1)
+                    .opacity(appeared ? 1 : 0)
+                    .animation(
+                        .spring(response: 0.3, dampingFraction: 0.68)
+                        .delay(Double(i) * 0.04),
+                        value: appeared
+                    )
             }
+
+            VStack(spacing: 3) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Drop to pin")
+                    .font(.system(size: 9))
+            }
+            .foregroundStyle(.tertiary)
+            .shadow(color: .black.opacity(0.5), radius: 2)
         }
-        .padding(12)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 30))
-                .foregroundStyle(.quaternary)
-            Text("Drop anything here")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-            Text("Apps · Folders · Files")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+    // MARK: - Helpers
+
+    // Starts at the top (−π/2) and goes clockwise.
+    // In SwiftUI (y-down), increasing angle is visually clockwise.
+    private func radialAngle(_ i: Int, of total: Int) -> CGFloat {
+        (2 * .pi / CGFloat(max(total, 1))) * CGFloat(i) - .pi / 2
     }
 
-    private func handlePaletteDrop(_ providers: [NSItemProvider]) -> Bool {
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         for p in providers {
             _ = p.loadObject(ofClass: URL.self) { url, _ in
                 guard let url else { return }
-                DispatchQueue.main.async { self.store.add(url: url) }
+                Task { @MainActor in self.store.add(url: url) }
             }
         }
         return true
     }
-}
-
-// NSVisualEffectView bridge for the frosted-glass background
-struct VisualEffect: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let blending: NSVisualEffectView.BlendingMode
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView()
-        v.material = material
-        v.blendingMode = blending
-        v.state = .active
-        return v
-    }
-
-    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
 }

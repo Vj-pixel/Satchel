@@ -1,49 +1,60 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct PinnedItemView: View {
+// Each pin in the radial ring is a frosted-glass circle with an icon.
+struct RadialItemView: View {
     let item: PinnedItem
-    @EnvironmentObject var store: PinStore
-    @State private var isTargeted = false
+    @Environment(PinStore.self) var store
     @State private var isHovered = false
+    @State private var isTargeted = false
 
     var body: some View {
-        VStack(spacing: 3) {
-            Image(nsImage: item.icon)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 44, height: 44)
-                .scaleEffect(isHovered ? 1.08 : 1.0)
-                .animation(.spring(response: 0.2, dampingFraction: 0.65), value: isHovered)
-
-            Text(item.name)
-                .font(.system(size: 9.5))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(width: 60)
+        VStack(spacing: 4) {
+            circle
+            label
         }
-        .frame(width: 68, height: 78)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(bgColor)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isTargeted ? Color.accentColor : .clear, lineWidth: 1.5)
-        )
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
         .onTapGesture { NSWorkspace.shared.open(item.url) }
         .contextMenu { contextItems }
         .onDrop(of: [.fileURL], isTargeted: $isTargeted, perform: handleDrop)
     }
 
-    private var bgColor: Color {
-        if isTargeted { return Color.accentColor.opacity(0.14) }
-        if isHovered  { return Color.primary.opacity(0.07) }
-        return .clear
+    // MARK: - Subviews
+
+    private var circle: some View {
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            isTargeted ? Color.accentColor : Color.white.opacity(0.2),
+                            lineWidth: isTargeted ? 2 : 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+
+            Image(nsImage: item.icon)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 34, height: 34)
+        }
+        .frame(width: 60, height: 60)
+        .scaleEffect(isHovered ? 1.12 : isTargeted ? 1.06 : 1)
+        .animation(.spring(response: 0.2, dampingFraction: 0.65), value: isHovered)
+        .animation(.spring(response: 0.2, dampingFraction: 0.65), value: isTargeted)
+        .onHover { isHovered = $0 }
     }
+
+    private var label: some View {
+        Text(item.name)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .frame(maxWidth: 72)
+            .shadow(color: .black.opacity(0.6), radius: 2)
+    }
+
+    // MARK: - Context menu
 
     @ViewBuilder
     private var contextItems: some View {
@@ -79,7 +90,7 @@ struct PinnedItemView: View {
         for p in providers {
             _ = p.loadObject(ofClass: URL.self) { url, _ in
                 guard let url else { return }
-                DispatchQueue.main.async { self.performDrop(url: url) }
+                Task { @MainActor in self.performDrop(url: url) }
             }
         }
         return true
@@ -88,11 +99,9 @@ struct PinnedItemView: View {
     private func performDrop(url: URL) {
         switch item.kind {
         case .folder:
-            // Move the dropped file into this folder
             let dest = item.url.appendingPathComponent(url.lastPathComponent)
             try? FileManager.default.moveItem(at: url, to: dest)
         case .app:
-            // Open the dropped file with this app
             NSWorkspace.shared.open(
                 [url], withApplicationAt: item.url,
                 configuration: .init(), completionHandler: nil

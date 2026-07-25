@@ -1,11 +1,12 @@
 import AppKit
-import Combine
+import Observation
 
 @MainActor
-final class PinStore: ObservableObject {
+@Observable
+final class PinStore {
     static let shared = PinStore()
 
-    @Published private(set) var items: [PinnedItem] = []
+    private(set) var items: [PinnedItem] = []
 
     private init() { load() }
 
