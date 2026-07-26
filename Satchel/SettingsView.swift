@@ -13,7 +13,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Pinned Items") {
+            Section("Standby Items") {
                 pinList
             }
         }
@@ -60,7 +60,7 @@ struct SettingsView: View {
     private var pinList: some View {
         let items = PinStore.shared.items
         if items.isEmpty {
-            Text("No pins yet — press ⌥Space and drag anything onto the palette.")
+            Text("Nothing on standby yet — press ⌥Space and drop a file onto the Standby ring.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         } else {

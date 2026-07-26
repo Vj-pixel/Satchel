@@ -1,4 +1,5 @@
 import AppKit
+internal import Combine
 import Observation
 
 @MainActor

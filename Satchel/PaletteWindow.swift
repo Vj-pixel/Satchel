@@ -5,7 +5,7 @@ final class PaletteWindow: NSPanel {
     init() {
         // 260×260 fits radius=90 ring + 60pt items with padding.
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: 280, height: 280),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false

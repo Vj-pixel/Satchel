@@ -1,120 +1,107 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
+
+// MARK: - Action model
+
+enum SatchelAction: CaseIterable, Identifiable {
+    case airdrop, messages, standby
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .airdrop:  "AirDrop"
+        case .messages: "Messages"
+        case .standby:  "Standby"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .airdrop:  "wifi"
+        case .messages: "message.fill"
+        case .standby:  "tray.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .airdrop:  .blue
+        case .messages: .green
+        case .standby:  .orange
+        }
+    }
+
+    // Evenly spaced, starting at top (−π/2) going clockwise in SwiftUI's y-down space.
+    var angle: CGFloat {
+        switch self {
+        case .airdrop:  -.pi / 2                 // 12 o'clock
+        case .messages: -.pi / 2 + 2 * .pi / 3  // 4 o'clock  (lower-right)
+        case .standby:  -.pi / 2 + 4 * .pi / 3  // 8 o'clock  (lower-left)
+        }
+    }
+
+    // Called when a file is dropped on the ring.
+    func perform(with url: URL) {
+        switch self {
+        case .airdrop:
+            NSSharingService(named: .sendViaAirDrop)?.perform(withItems: [url])
+        case .messages:
+            NSSharingService(named: .composeMessage)?.perform(withItems: [url])
+        case .standby:
+            Task { @MainActor in PinStore.shared.add(url: url) }
+        }
+    }
+
+    // Called on a bare tap (no file).
+    func activate() {
+        switch self {
+        case .airdrop:
+            if let url = URL(string: "airdrop://") { NSWorkspace.shared.open(url) }
+        case .messages:
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.MobileSMS") {
+                NSWorkspace.shared.open(url)
+            }
+        case .standby:
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+}
+
+// MARK: - Palette view
 
 struct PaletteView: View {
-    @Environment(PinStore.self) var store
     @State private var appeared = false
-    @State private var dropTargeted = false
 
-    private let radius: CGFloat = 90
-    private let itemSize: CGFloat = 60
+    private let radius: CGFloat = 80
 
     var body: some View {
         ZStack {
-            // Transparent full-area drop zone (adds new pins)
-            Color.clear
-                .onDrop(of: [.fileURL], isTargeted: $dropTargeted, perform: handleDrop)
-
-            // Subtle drop-target ring
-            Circle()
-                .strokeBorder(Color.accentColor, lineWidth: 2)
-                .frame(width: radius * 2 + 8, height: radius * 2 + 8)
-                .opacity(dropTargeted ? 1 : 0)
-                .animation(.easeInOut(duration: 0.12), value: dropTargeted)
-
-            // Center pip — anchors the eye at the cursor position
+            // Tiny center pip marks the cursor anchor point.
             Circle()
                 .fill(.ultraThinMaterial)
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
                 .frame(width: 14, height: 14)
-                .shadow(color: .black.opacity(0.3), radius: 4)
+                .shadow(color: .black.opacity(0.35), radius: 4)
 
-            if store.items.isEmpty {
-                emptyRing
-            } else {
-                radialItems
-            }
-        }
-        .frame(width: 260, height: 260)
-        .onAppear {
-            withAnimation { appeared = true }
-        }
-        .onDisappear {
-            appeared = false
-        }
-    }
-
-    // MARK: - Radial items
-
-    private var radialItems: some View {
-        ForEach(Array(store.items.enumerated()), id: \.element.id) { i, item in
-            let angle = radialAngle(i, of: store.items.count)
-            RadialItemView(item: item)
-                .offset(
-                    x: appeared ? radius * cos(angle) : 0,
-                    y: appeared ? radius * sin(angle) : 0
-                )
-                .scaleEffect(appeared ? 1 : 0.1)
-                .opacity(appeared ? 1 : 0)
-                .animation(
-                    .spring(response: 0.3, dampingFraction: 0.68)
-                    .delay(Double(i) * 0.04),
-                    value: appeared
-                )
-        }
-    }
-
-    // MARK: - Empty state (dashed ghost circles)
-
-    private var emptyRing: some View {
-        Group {
-            ForEach(0..<4, id: \.self) { i in
-                let angle = radialAngle(i, of: 4)
-                Circle()
-                    .strokeBorder(
-                        Color.primary.opacity(0.18),
-                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
-                    )
-                    .frame(width: itemSize, height: itemSize)
+            ForEach(Array(SatchelAction.allCases.enumerated()), id: \.element.id) { i, action in
+                ActionRingView(action: action)
                     .offset(
-                        x: appeared ? radius * cos(angle) : 0,
-                        y: appeared ? radius * sin(angle) : 0
+                        x: appeared ? radius * cos(action.angle) : 0,
+                        y: appeared ? radius * sin(action.angle) : 0
                     )
-                    .scaleEffect(appeared ? 1 : 0.1)
+                    .scaleEffect(appeared ? 1 : 0.05)
                     .opacity(appeared ? 1 : 0)
                     .animation(
-                        .spring(response: 0.3, dampingFraction: 0.68)
-                        .delay(Double(i) * 0.04),
+                        .spring(response: 0.32, dampingFraction: 0.66).delay(Double(i) * 0.06),
                         value: appeared
                     )
             }
-
-            VStack(spacing: 3) {
-                Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .semibold))
-                Text("Drop to pin")
-                    .font(.system(size: 9))
-            }
-            .foregroundStyle(.tertiary)
-            .shadow(color: .black.opacity(0.5), radius: 2)
         }
-    }
-
-    // MARK: - Helpers
-
-    // Starts at the top (−π/2) and goes clockwise.
-    // In SwiftUI (y-down), increasing angle is visually clockwise.
-    private func radialAngle(_ i: Int, of total: Int) -> CGFloat {
-        (2 * .pi / CGFloat(max(total, 1))) * CGFloat(i) - .pi / 2
-    }
-
-    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        for p in providers {
-            _ = p.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                Task { @MainActor in self.store.add(url: url) }
-            }
-        }
-        return true
+        .frame(width: 280, height: 280)
+        .onAppear { withAnimation { appeared = true } }
+        .onDisappear { appeared = false }
     }
 }
