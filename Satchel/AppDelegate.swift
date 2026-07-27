@@ -31,7 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func hidePalette() {
-        paletteWindow?.orderOut(nil)
+        guard let w = paletteWindow, w.isVisible else { return }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.12
+            w.animator().alphaValue = 0
+        }) {
+            w.orderOut(nil)
+            w.alphaValue = 1
+        }
     }
 
     private func clamped(_ pt: NSPoint, _ sz: NSSize) -> NSPoint {

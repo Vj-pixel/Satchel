@@ -23,4 +23,12 @@ final class PaletteWindow: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { // Escape
+            NotificationCenter.default.post(name: .escapePalette, object: nil)
+        } else {
+            super.keyDown(with: event)
+        }
+    }
 }

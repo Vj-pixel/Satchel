@@ -1,12 +1,26 @@
 import SwiftUI
+import ServiceManagement
 
 struct SettingsView: View {
     @Environment(HotkeyStore.self) var hotkeyStore
     @State private var isRecording = false
     @State private var localMonitor: Any?
+    @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
 
     var body: some View {
         Form {
+            Section("General") {
+                Toggle("Launch at Login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        do {
+                            if newValue { try SMAppService.mainApp.register() }
+                            else { try SMAppService.mainApp.unregister() }
+                        } catch {
+                            launchAtLogin = !newValue
+                        }
+                    }
+            }
+
             Section("Keyboard Shortcut") {
                 LabeledContent("Invoke Satchel") {
                     hotkeyField
@@ -18,7 +32,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 320)
+        .frame(width: 400, height: 380)
     }
 
     // MARK: - Hotkey recorder

@@ -1,6 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// MARK: - Action ring
+
 struct ActionRingView: View {
     let action: SatchelAction
     @State private var isHovered = false
@@ -22,22 +24,12 @@ struct ActionRingView: View {
 
     private var ring: some View {
         ZStack {
-            // Frosted glass base
-            Circle()
-                .fill(.ultraThinMaterial)
-
-            // Tint fill that intensifies on hover / targeting
-            Circle()
-                .fill(action.tint.opacity(isTargeted ? 0.28 : isHovered ? 0.14 : 0.06))
-
-            // Border
-            Circle()
-                .strokeBorder(
-                    isTargeted ? action.tint : Color.white.opacity(0.22),
-                    lineWidth: isTargeted ? 2 : 0.5
-                )
-
-            // Icon
+            Circle().fill(.ultraThinMaterial)
+            Circle().fill(action.tint.opacity(isTargeted ? 0.28 : isHovered ? 0.14 : 0.06))
+            Circle().strokeBorder(
+                isTargeted ? action.tint : Color.white.opacity(0.22),
+                lineWidth: isTargeted ? 2 : 0.5
+            )
             Image(systemName: action.icon)
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(isTargeted ? action.tint : Color.primary.opacity(0.75))
@@ -54,8 +46,6 @@ struct ActionRingView: View {
         .animation(.spring(response: 0.2, dampingFraction: 0.65), value: isTargeted)
     }
 
-    // MARK: - Drop
-
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         for p in providers {
             _ = p.loadObject(ofClass: URL.self) { url, _ in
@@ -69,5 +59,47 @@ struct ActionRingView: View {
             }
         }
         return true
+    }
+}
+
+// MARK: - Standby item cell
+
+struct StandbyItemView: View {
+    let item: PinnedItem
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 3) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(isHovered ? 0.12 : 0.06))
+                Image(nsImage: item.icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 30, height: 30)
+            }
+            .frame(width: 48, height: 48)
+
+            Text(item.name)
+                .font(.system(size: 9))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.primary.opacity(0.75))
+                .frame(maxWidth: 52)
+        }
+        .onHover { isHovered = $0 }
+        .onTapGesture {
+            NSWorkspace.shared.open(item.url)
+            AppDelegate.shared?.hidePalette()
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                PinStore.shared.remove(id: item.id)
+            } label: {
+                Label("Remove from Standby", systemImage: "trash")
+            }
+        }
+        .scaleEffect(isHovered ? 1.06 : 1)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
     }
 }
