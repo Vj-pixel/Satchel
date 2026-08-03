@@ -5,12 +5,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     var paletteWindow: PaletteWindow?
     private var eventMonitor: Any?
+    private var previousApp: NSRunningApplication?
+    private var isDismissing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
         paletteWindow = PaletteWindow()
-        setupDismiss()
         registerHotKey()
     }
 
@@ -23,21 +24,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showPalette() {
         guard let w = paletteWindow else { return }
+        previousApp = NSWorkspace.shared.frontmostApplication
         let m = NSEvent.mouseLocation
         let sz = w.frame.size
         w.setFrameOrigin(clamped(NSPoint(x: m.x - sz.width / 2, y: m.y - sz.height / 2), sz))
         w.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
     }
 
     func hidePalette() {
-        guard let w = paletteWindow, w.isVisible else { return }
+        guard let w = paletteWindow, w.isVisible, !isDismissing else { return }
+        isDismissing = true
+        previousApp?.activate()
+        previousApp = nil
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.12
             w.animator().alphaValue = 0
-        }) {
+        }) { [weak self] in
             w.orderOut(nil)
             w.alphaValue = 1
+            self?.isDismissing = false
         }
     }
 
@@ -47,19 +53,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             x: max(f.minX, min(pt.x, f.maxX - sz.width)),
             y: max(f.minY, min(pt.y, f.maxY - sz.height))
         )
-    }
-
-    // MARK: - Auto-dismiss on focus loss
-
-    private func setupDismiss() {
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            guard let self, note.object as? NSWindow === self.paletteWindow else { return }
-            self.hidePalette()
-        }
     }
 
     // MARK: - Global hotkey

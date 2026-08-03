@@ -3,9 +3,9 @@ import SwiftUI
 
 final class PaletteWindow: NSPanel {
     init() {
-        // 260×260 fits radius=90 ring + 60pt items with padding.
+        // 380×380 accommodates 6 rings at all three size presets.
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 380),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -17,7 +17,9 @@ final class PaletteWindow: NSPanel {
         isOpaque = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let root = PaletteView().environment(PinStore.shared)
+        let root = PaletteView()
+            .environment(PinStore.shared)
+            .environment(AppearanceStore.shared)
         contentView = NSHostingView(rootView: root)
     }
 

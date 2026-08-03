@@ -21,6 +21,7 @@ struct SatchelApp: App {
             SettingsView()
                 .environment(HotkeyStore.shared)
                 .environment(PinStore.shared)
+                .environment(AppearanceStore.shared)
         }
     }
 }

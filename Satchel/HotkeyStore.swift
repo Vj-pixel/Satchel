@@ -2,8 +2,8 @@ import AppKit
 import Observation
 
 struct HotkeyConfig: Codable {
-    var keyCode: UInt16 = 49                   // Space
-    var modifierRaw: UInt = NSEvent.ModifierFlags.option.rawValue
+    var keyCode: UInt16 = 49  // Space
+    var modifierRaw: UInt = NSEvent.ModifierFlags([.control, .option]).rawValue  // ⌃⌥Space
 
     static let `default` = HotkeyConfig()
 

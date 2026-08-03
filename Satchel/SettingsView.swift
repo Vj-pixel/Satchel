@@ -3,9 +3,11 @@ import ServiceManagement
 
 struct SettingsView: View {
     @Environment(HotkeyStore.self) var hotkeyStore
+    @Environment(AppearanceStore.self) var appearance
     @State private var isRecording = false
     @State private var localMonitor: Any?
     @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
+    @State private var accessibilityGranted = AXIsProcessTrusted()
 
     var body: some View {
         Form {
@@ -21,18 +23,55 @@ struct SettingsView: View {
                     }
             }
 
+            Section("Appearance") {
+                LabeledContent("Ring Size") {
+                    Picker("", selection: Binding(
+                        get: { appearance.ringSize },
+                        set: { appearance.setRingSize($0) }
+                    )) {
+                        ForEach(RingSize.allCases, id: \.self) { size in
+                            Text(size.label).tag(size)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                }
+            }
+
             Section("Keyboard Shortcut") {
                 LabeledContent("Invoke Satchel") {
                     hotkeyField
                 }
             }
 
-            Section("Standby Items") {
+            Section("Permissions") {
+                HStack(spacing: 8) {
+                    Image(systemName: accessibilityGranted
+                          ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(accessibilityGranted ? .green : .orange)
+                    Text(accessibilityGranted
+                         ? "Accessibility access granted"
+                         : "Accessibility access required for global hotkey")
+                        .font(.system(size: 12))
+                    Spacer()
+                    if !accessibilityGranted {
+                        Button("Open Settings") {
+                            NSWorkspace.shared.open(
+                                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+                            )
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .onAppear { accessibilityGranted = AXIsProcessTrusted() }
+            }
+
+            Section("Your Satchel") {
                 pinList
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 380)
+        .frame(width: 420, height: 460)
     }
 
     // MARK: - Hotkey recorder
@@ -74,7 +113,7 @@ struct SettingsView: View {
     private var pinList: some View {
         let items = PinStore.shared.items
         if items.isEmpty {
-            Text("Nothing on standby yet — press ⌥Space and drop a file onto the Standby ring.")
+            Text("Nothing in Your Satchel yet — press ⌃⌥Space and drop a file onto the Satchel ring.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         } else {
@@ -112,7 +151,7 @@ struct SettingsView: View {
                 return nil
             }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard !flags.isEmpty else { return nil } // require at least one modifier
+            guard !flags.isEmpty else { return nil }
             let newCfg = HotkeyConfig(keyCode: event.keyCode, modifierRaw: flags.rawValue)
             self.hotkeyStore.updateConfig(newCfg)
             self.stopRecording()

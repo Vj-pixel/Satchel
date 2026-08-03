@@ -16,7 +16,7 @@ private enum PaletteMode: Equatable { case rings, standby }
 // MARK: - Action model
 
 enum SatchelAction: CaseIterable, Identifiable {
-    case airdrop, messages, standby
+    case airdrop, messages, mail, copy, finder, standby
 
     var id: Self { self }
 
@@ -24,7 +24,10 @@ enum SatchelAction: CaseIterable, Identifiable {
         switch self {
         case .airdrop:  "AirDrop"
         case .messages: "Messages"
-        case .standby:  "Standby"
+        case .mail:     "Mail"
+        case .copy:     "Copy"
+        case .finder:   "Finder"
+        case .standby:  "Your Satchel"
         }
     }
 
@@ -32,6 +35,9 @@ enum SatchelAction: CaseIterable, Identifiable {
         switch self {
         case .airdrop:  "wifi"
         case .messages: "message.fill"
+        case .mail:     "envelope.fill"
+        case .copy:     "doc.on.doc.fill"
+        case .finder:   "folder.fill"
         case .standby:  "tray.fill"
         }
     }
@@ -40,17 +46,18 @@ enum SatchelAction: CaseIterable, Identifiable {
         switch self {
         case .airdrop:  .blue
         case .messages: .green
+        case .mail:     .indigo
+        case .copy:     .teal
+        case .finder:   .yellow
         case .standby:  .orange
         }
     }
 
-    // Evenly spaced starting at top (−π/2), clockwise in SwiftUI's y-down space.
+    // Evenly distributed starting at 12 o'clock, clockwise in SwiftUI y-down space.
     var angle: CGFloat {
-        switch self {
-        case .airdrop:  -.pi / 2
-        case .messages: -.pi / 2 + 2 * .pi / 3
-        case .standby:  -.pi / 2 + 4 * .pi / 3
-        }
+        let all = SatchelAction.allCases
+        guard let i = all.firstIndex(of: self) else { return 0 }
+        return (2 * .pi / CGFloat(all.count)) * CGFloat(i) - .pi / 2
     }
 
     func perform(with url: URL) {
@@ -59,6 +66,14 @@ enum SatchelAction: CaseIterable, Identifiable {
             NSSharingService(named: .sendViaAirDrop)?.perform(withItems: [url])
         case .messages:
             NSSharingService(named: .composeMessage)?.perform(withItems: [url])
+        case .mail:
+            NSSharingService(named: .composeEmail)?.perform(withItems: [url])
+        case .copy:
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.writeObjects([url as NSURL])
+        case .finder:
+            NSWorkspace.shared.activateFileViewerSelecting([url])
         case .standby:
             Task { @MainActor in PinStore.shared.add(url: url) }
         }
@@ -72,6 +87,14 @@ enum SatchelAction: CaseIterable, Identifiable {
             if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.MobileSMS") {
                 NSWorkspace.shared.open(url)
             }
+        case .mail:
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.mail") {
+                NSWorkspace.shared.open(url)
+            }
+        case .copy:
+            break
+        case .finder:
+            NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser)
         case .standby:
             NotificationCenter.default.post(name: .showStandby, object: nil)
         }
@@ -82,10 +105,10 @@ enum SatchelAction: CaseIterable, Identifiable {
 
 struct PaletteView: View {
     @Environment(PinStore.self) private var pinStore
+    @Environment(AppearanceStore.self) private var appearance
     @State private var appeared = false
     @State private var mode: PaletteMode = .rings
 
-    private let radius: CGFloat = 80
     private let springAnim = Animation.spring(response: 0.32, dampingFraction: 0.75)
 
     var body: some View {
@@ -104,7 +127,7 @@ struct PaletteView: View {
                     ))
             }
         }
-        .frame(width: 280, height: 280)
+        .frame(width: 380, height: 380)
         .animation(springAnim, value: mode)
         .onAppear  { withAnimation { appeared = true } }
         .onDisappear { appeared = false; mode = .rings }
@@ -125,22 +148,27 @@ struct PaletteView: View {
     @ViewBuilder
     private var ringsContent: some View {
         ZStack {
+            // Center pip pops in first before petals bloom
             Circle()
                 .fill(.ultraThinMaterial)
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
                 .frame(width: 14, height: 14)
                 .shadow(color: .black.opacity(0.35), radius: 4)
+                .scaleEffect(appeared ? 1 : 0.01)
+                .animation(.spring(response: 0.22, dampingFraction: 0.58), value: appeared)
 
             ForEach(Array(SatchelAction.allCases.enumerated()), id: \.element.id) { i, action in
                 ActionRingView(action: action)
                     .offset(
-                        x: appeared ? radius * cos(action.angle) : 0,
-                        y: appeared ? radius * sin(action.angle) : 0
+                        x: appeared ? appearance.ringSize.radius * cos(action.angle) : 0,
+                        y: appeared ? appearance.ringSize.radius * sin(action.angle) : 0
                     )
-                    .scaleEffect(appeared ? 1 : 0.05)
+                    .scaleEffect(appeared ? 1 : 0.01)
                     .opacity(appeared ? 1 : 0)
+                    // Bouncy spring + sequential stagger = flower bloom feel
                     .animation(
-                        .spring(response: 0.32, dampingFraction: 0.66).delay(Double(i) * 0.06),
+                        .spring(response: 0.38, dampingFraction: 0.52)
+                            .delay(0.06 + Double(i) * 0.07),
                         value: appeared
                     )
             }
@@ -164,13 +192,12 @@ struct PaletteView: View {
 
                 Spacer()
 
-                Text("Standby")
+                Text("Your Satchel")
                     .font(.system(size: 13, weight: .semibold))
 
                 Spacer()
 
-                // Balance chevron so title stays centered
-                Image(systemName: "chevron.left").opacity(0)
+                Image(systemName: "chevron.left").opacity(0) // balance
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -186,7 +213,7 @@ struct PaletteView: View {
                     Text("Nothing saved yet")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text("Drop a file onto the Standby\nring to stash it here.")
+                    Text("Drop a file onto the\nYour Satchel ring to stash it here.")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)
@@ -206,7 +233,7 @@ struct PaletteView: View {
                 }
             }
         }
-        .frame(width: 240, height: 240)
+        .frame(width: 260, height: 260)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)

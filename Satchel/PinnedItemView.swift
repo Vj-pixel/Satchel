@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct ActionRingView: View {
     let action: SatchelAction
+    @Environment(AppearanceStore.self) private var appearance
     @State private var isHovered = false
     @State private var isTargeted = false
     @State private var bounced = false
@@ -16,6 +17,9 @@ struct ActionRingView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.primary.opacity(0.85))
                 .shadow(color: .black.opacity(0.55), radius: 2)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(maxWidth: appearance.ringSize.diameter + 12)
         }
         .onHover { isHovered = $0 }
         .onTapGesture { action.activate() }
@@ -23,7 +27,10 @@ struct ActionRingView: View {
     }
 
     private var ring: some View {
-        ZStack {
+        let d = appearance.ringSize.diameter
+        let iconPt = appearance.ringSize.iconSize
+
+        return ZStack {
             Circle().fill(.ultraThinMaterial)
             Circle().fill(action.tint.opacity(isTargeted ? 0.28 : isHovered ? 0.14 : 0.06))
             Circle().strokeBorder(
@@ -31,11 +38,11 @@ struct ActionRingView: View {
                 lineWidth: isTargeted ? 2 : 0.5
             )
             Image(systemName: action.icon)
-                .font(.system(size: 28, weight: .medium))
+                .font(.system(size: iconPt, weight: .medium))
                 .foregroundStyle(isTargeted ? action.tint : Color.primary.opacity(0.75))
                 .symbolEffect(.bounce, value: bounced)
         }
-        .frame(width: 72, height: 72)
+        .frame(width: d, height: d)
         .shadow(
             color: action.tint.opacity(isTargeted ? 0.45 : 0.12),
             radius: isTargeted ? 14 : 6,
@@ -96,7 +103,7 @@ struct StandbyItemView: View {
             Button(role: .destructive) {
                 PinStore.shared.remove(id: item.id)
             } label: {
-                Label("Remove from Standby", systemImage: "trash")
+                Label("Remove from Satchel", systemImage: "trash")
             }
         }
         .scaleEffect(isHovered ? 1.06 : 1)
